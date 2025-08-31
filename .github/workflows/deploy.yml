@@ -26,6 +26,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set ENV flag
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "NEXT_PUBLIC_ENV=production" >> $GITHUB_ENV
+          else
+            echo "NEXT_PUBLIC_ENV=staging" >> $GITHUB_ENV
+          fi
+
       - name: Build (Next.js static export)
         run: npm run build
         # next.config.ts に output: "export" がある前提 → out/ が生成
@@ -39,7 +47,7 @@ jobs:
             echo "REMOTE_PATH=${{ secrets.REMOTE_PATH_STG }}" >> $GITHUB_ENV
           fi
           echo "REMOTE_PATH=$REMOTE_PATH"
-          
+
       # --- デプロイ方法を secrets の有無で決定（envに注入） ---
       - name: Resolve deploy method
         run: |

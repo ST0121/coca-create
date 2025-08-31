@@ -15,9 +15,15 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+
+  const isStaging = process.env.NEXT_PUBLIC_ENV !== "production";
   return (
     <html lang="ja">
       <head>
+        {/* ← ステージングのときだけ noindex を出力 */}
+        {isStaging && (
+          <meta name="robots" content="noindex,nofollow" />
+        )}
         {/* Google Tag Manager（head） */}
         <Script
           id="gtm"
