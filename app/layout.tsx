@@ -6,24 +6,25 @@ import ClientBehaviors from "./components/ClientBehaviors";
 import GsapEffects from "./components/GsapEffects";
 import Link from "next/link";
 
+const isStaging = process.env.NEXT_PUBLIC_ENV !== "production";
+
 export const metadata: Metadata = {
   title: "cocacreate-コカクリエイト",
   description:
     "大阪府平野区を拠点にWeb製作事業を展開しております。コーディング代行、HP製作/LP製作、バナーデザインなど、Webに関することはなんでもご相談ください。",
   // viewport も metadata で付与可能（重複回避したい場合）
   viewport: "width=device-width, initial-scale=1.0",
+   robots: isStaging
+    ? { index: false, follow: false } // = noindex, nofollow
+    : { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 
-  const isStaging = process.env.NEXT_PUBLIC_ENV !== "production";
+  
   return (
     <html lang="ja">
       <head>
-        {/* ← ステージングのときだけ noindex を出力 */}
-        {isStaging && (
-          <meta name="robots" content="noindex,nofollow" />
-        )}
         {/* Google Tag Manager（head） */}
         <Script
           id="gtm"
