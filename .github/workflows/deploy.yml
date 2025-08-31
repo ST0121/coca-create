@@ -54,39 +54,21 @@ jobs:
           echo "USE_SSH=$USE_SSH"
 
       # ====== SSH鍵 + rsync（おすすめ）======
-        - name: Install rsync + ssh
+      - name: Install rsync + ssh
         if: env.USE_SSH == 'true'
         run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
 
-        - name: Setup SSH key
+      - name: Setup SSH key
         if: env.USE_SSH == 'true'
-        env:
-            SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-            SFTP_HOST: ${{ secrets.SFTP_HOST }}
-            SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
-            set -euo pipefail
-            mkdir -p ~/.ssh
-            chmod 700 ~/.ssh
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t rsa ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
 
-            # 秘密鍵を書き出し（CRLF除去で崩れ対策）
-            printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-            sed -i 's/\r$//' ~/.ssh/id_ed25519
-            chmod 600 ~/.ssh/id_ed25519
-
-            # known_hosts 登録（鍵種まとめて/ポート対応）
-            ssh-keyscan -p "$SSH_PORT" -H -t rsa,ecdsa,ed25519 "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-            chmod 644 ~/.ssh/known_hosts
-
-            # 接続テスト（ここで失敗理由が明確に出ます）
-            ssh -vvv -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "${{ secrets.SFTP_USER }}"@"$SFTP_HOST" 'echo SSH OK'
-
-        - name: Deploy via rsync over SSH
+      - name: Deploy via rsync over SSH
         if: env.USE_SSH == 'true'
-        env:
-            SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
-            rsync -avz --delete -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=yes" \
+          rsync -avz --delete \
             out/ \
             ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ env.REMOTE_PATH }}/
