@@ -30,7 +30,7 @@ jobs:
         run: npm run build
         # next.config.ts に output: "export" がある前提 → out/ が生成
 
-      # --- デプロイ先パスをブランチで決定（envに入れる）---
+      # --- ブランチでデプロイ先パスを切替（envに注入） ---
       - name: Resolve REMOTE_PATH
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
@@ -40,7 +40,7 @@ jobs:
           fi
           echo "REMOTE_PATH=$REMOTE_PATH"
 
-      # --- デプロイ方法を secrets 有無で決定（envに入れる）---
+      # --- デプロイ方法を secrets の有無で決定（envに注入） ---
       - name: Resolve deploy method
         run: |
           if [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
@@ -51,24 +51,46 @@ jobs:
             echo "Neither SSH_PRIVATE_KEY nor SFTP_PASSWORD is set." >&2
             exit 1
           fi
-          echo "USE_SSH=$USE_SSH"
+          # ポート指定（未設定なら 22、Xserver は 10022 を secrets に入れる）
+          echo "SSH_PORT=${{ secrets.SSH_PORT || '22' }}" >> $GITHUB_ENV
+          echo "USE_SSH=$USE_SSH, SSH_PORT=$SSH_PORT"
 
-      # ====== SSH鍵 + rsync（おすすめ）======
+      # ====== SSH鍵 + rsync（推奨）======
       - name: Install rsync + ssh
         if: env.USE_SSH == 'true'
         run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
 
       - name: Setup SSH key
         if: env.USE_SSH == 'true'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SSH_PORT: ${{ env.SSH_PORT }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 700 ~/.ssh
+
+          # 秘密鍵を書き出し（CRLF除去で安全に）
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          sed -i 's/\r$//' ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t rsa ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
+
+          # known_hosts 登録（ポート指定 & 複数鍵種）
+          ssh-keyscan -p "$SSH_PORT" -H -t rsa,ecdsa,ed25519 "$SFTP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 644 ~/.ssh/known_hosts
+
+          # 接続テスト（ここで落ちたら Secrets/鍵/ポートを見直し）
+          ssh -vvv -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${{ secrets.SFTP_USER }}"@"$SFTP_HOST" 'echo SSH OK'
 
       - name: Deploy via rsync over SSH
         if: env.USE_SSH == 'true'
+        env:
+          SSH_PORT: ${{ env.SSH_PORT }}
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=yes" \
             out/ \
             ${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ env.REMOTE_PATH }}/
+
+    
