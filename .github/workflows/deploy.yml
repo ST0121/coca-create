@@ -39,7 +39,7 @@ jobs:
             echo "REMOTE_PATH=${{ secrets.REMOTE_PATH_STG }}" >> $GITHUB_ENV
           fi
           echo "REMOTE_PATH=$REMOTE_PATH"
-
+          
       # --- デプロイ方法を secrets の有無で決定（envに注入） ---
       - name: Resolve deploy method
         run: |
